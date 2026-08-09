@@ -1,19 +1,34 @@
 # A very simple Flask Hello World app for you to get started with...
 from flask import Flask, render_template, request, abort, make_response, redirect
+from flask_bootstrap import Bootstrap
+from flask_moment import Moment
+from datetime import datetime
+
 app = Flask(__name__)
+moment = Moment(app)
+bootstrap = Bootstrap(app)
 
 @app.route('/')
-def hello_world():
-    return '<h1>Hello World!</h1><h2>Disciplina PTBDSWS</h2>'
+def home():
+    return render_template('index.html', current_time=datetime.utcnow())
 
-@app.route('/user/<name>')
-def user(name):
-    return '<h1>Hello, {}!</h1>'.format(name)
 
-@app.route('/contextorequisicao')
-def contextorequisicao():
+@app.route('/user/<name>/<prontuario>/<instituicao>')
+def user(name, prontuario, instituicao):
+    return render_template('user.html', name=name, prontuario=prontuario, instituicao=instituicao)
+
+@app.route('/contextorequisicao/<name>')
+def contextorequisicao(name):
     user_agent = request.headers.get('User-Agent')
-    return '<p>Your browser is {}</p>'.format(user_agent)
+
+    if request.headers.get('X-Forwarded-For'):
+        ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    else:
+        ip = request.remote_addr
+
+    host = request.host
+
+    return render_template('requisicao.html', user_agent=user_agent, ip=ip, host=host, name=name)
 
 @app.errorhandler(400)
 def bad_request(e):
