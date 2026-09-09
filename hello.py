@@ -3,7 +3,7 @@ from flask import Flask, render_template, session, redirect, url_for
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, SelectField
 from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -44,6 +44,7 @@ class User(db.Model):
 
 class NameForm(FlaskForm):
     name = StringField('What is your name?', validators=[DataRequired()])
+    role = SelectField('Role?:', coerce=int)
     submit = SubmitField('Submit')
 
 
@@ -65,22 +66,33 @@ def internal_server_error(e):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     form = NameForm()
+    roles = Role.query.all()
+    form.role.choices = [(role.id, role.name) for role in roles]
+
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.name.data).first()
+        selected_role = Role.query.get(form.role.data)
         if user is None:
-            user_role = Role.query.filter_by(name='User').first()
-            user = User(username=form.name.data, role=user_role)
+            user = User(username=form.name.data, role=selected_role)
             db.session.add(user)
             db.session.commit()
             session['known'] = False
         else:
             session['known'] = True
+            user.role = selected_role
+            db.session.commit()
         session['name'] = form.name.data
         return redirect(url_for('index'))
 
     users = User.query.all()
+    user_count = len(users)
+    role_count = len(roles)
+
     return render_template('index.html',
                            form=form,
                            name=session.get('name'),
                            known=session.get('known', False),
-                           users=users)
+                           users=users,
+                           roles=roles,
+                           user_count=user_count,
+                           role_count=role_count)

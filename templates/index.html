@@ -7,15 +7,17 @@
 <div class="page-header">
     <h1>Olá, {% if name %}{{ name }}{% else %}Stranger{% endif %}!</h1>
     {% if not known %}
-    <p>Prazer em conhecê-lo(a)!</p>
+    <p>Prazer em conhecê-lo!</p>
     {% else %}
-    <p>Feliz em vê-lo(a) novamente!</p>
+    <p>Agradável vê-lo novamente!</p>
     {% endif %}
 </div>
 
 {{ wtf.quick_form(form) }}
 
 <h2>Relação de usuários cadastrados</h2>
+<p>Quantidade: {{ user_count }}</p>
+
 <table class="table">
     <thead>
         <tr>
@@ -28,6 +30,32 @@
         <tr>
             <td>{{ user.username }}</td>
             <td>{{ user.role.name if user.role else 'Sem Função' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h2>Relação de funções cadastradas</h2>
+<p>Quantidade: {{ role_count }}</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Funções</th>
+            <th>Usuários</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for role in roles %}
+        <tr>
+            <td>{{ role.name }}</td>
+            <td>
+                <ol>
+                    {% for u in role.users %}
+                    <li>{{ u.username }}</li>
+                    {% endfor %}
+                </ol>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
