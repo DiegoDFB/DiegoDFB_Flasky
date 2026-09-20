@@ -4,5 +4,25 @@
 # Ignore Python cache directories
 __pycache__/
 
-# Ignore virtual environment directories
+.env
+.env.*
+
+*.sqlite
+*.db
+data.sqlite
+
 venv/
+env/
+ENV/
+.virtualenvs/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+*.log

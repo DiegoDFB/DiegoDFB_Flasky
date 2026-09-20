@@ -1,4 +1,6 @@
 import os
+from threading import Thread
+import requests
 from flask import Flask, render_template, session, redirect, url_for
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
@@ -11,10 +13,14 @@ from flask_migrate import Migrate
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'hard to guess string'
+app.config['SECRET_KEY'] = 'DiegoDFBIFSPDesenvWebPT3036278'
 app.config['SQLALCHEMY_DATABASE_URI'] =\
     'sqlite:///' + os.path.join(basedir, 'data.sqlite')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+app.config['FLASKY_MAIL_SUBJECT_PREFIX'] = '[Flasky]'
+app.config['FLASKY_ADMIN'] = os.environ.get('FLASKY_ADMIN')
+app.config['RESEND_API_KEY'] = os.environ.get('RESEND_API_KEY')
 
 bootstrap = Bootstrap(app)
 moment = Moment(app)
@@ -63,6 +69,37 @@ def internal_server_error(e):
     return render_template('500.html'), 500
 
 
+def send_async_email(app, payload):
+    with app.app_context():
+        headers = {
+            "Authorization": f"Bearer {app.config['RESEND_API_KEY']}",
+            "Content-Type": "application/json"
+        }
+        try:
+            requests.post("https://api.resend.com/emails", json=payload, headers=headers)
+        except Exception as e:
+            print("Erro ao enviar email:", e)
+
+
+def send_email(to, subject, template, **kwargs):
+    recipients = ["flaskaulasweb@zohomail.com"]
+    if to:
+        recipients.append(to)
+
+    html_content = render_template(template + '.html', **kwargs)
+
+    payload = {
+        "from": "Flasky <onboarding@resend.dev>",
+        "to": recipients,
+        "subject": app.config['FLASKY_MAIL_SUBJECT_PREFIX'] + ' ' + subject,
+        "html": html_content
+    }
+
+    thr = Thread(target=send_async_email, args=[app._get_current_object(), payload])
+    thr.start()
+    return thr
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     form = NameForm()
@@ -77,6 +114,10 @@ def index():
             db.session.add(user)
             db.session.commit()
             session['known'] = False
+
+            if app.config['FLASKY_ADMIN']:
+                send_email(app.config['FLASKY_ADMIN'], 'Novo Usuário Cadastrado',
+                           'mail/new_user', user=user)
         else:
             session['known'] = True
             user.role = selected_role
