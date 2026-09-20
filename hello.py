@@ -5,22 +5,32 @@ from flask import Flask, render_template, session, redirect, url_for
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, SelectField
+from wtforms import StringField, SubmitField
+# from wtforms import SelectField
 from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from dotenv import load_dotenv
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'DiegoDFBIFSPDesenvWebPT3036278'
+import os
+from dotenv import load_dotenv
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(os.path.join(basedir, '.env'))
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'DiegoDFBPT3036278IFSPDesenvWeb'
 app.config['SQLALCHEMY_DATABASE_URI'] =\
     'sqlite:///' + os.path.join(basedir, 'data.sqlite')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 app.config['FLASKY_MAIL_SUBJECT_PREFIX'] = '[Flasky]'
-app.config['FLASKY_ADMIN'] = os.environ.get('FLASKY_ADMIN')
-app.config['RESEND_API_KEY'] = os.environ.get('RESEND_API_KEY')
+app.config['FLASKY_ADMIN'] = os.getenv('FLASKY_ADMIN')
+app.config['SENDGRID_API_KEY'] = os.getenv('SENDGRID_API_KEY')
 
 bootstrap = Bootstrap(app)
 moment = Moment(app)
@@ -50,7 +60,7 @@ class User(db.Model):
 
 class NameForm(FlaskForm):
     name = StringField('What is your name?', validators=[DataRequired()])
-    role = SelectField('Role?:', coerce=int)
+    # role = SelectField('Role?:', coerce=int)
     submit = SubmitField('Submit')
 
 
@@ -61,41 +71,61 @@ def make_shell_context():
 
 @app.errorhandler(404)
 def page_not_found(e):
-    return render_template('404.html'), 404
-
+    return '<h1>Página não encontrada (404)</h1>', 404
 
 @app.errorhandler(500)
 def internal_server_error(e):
-    return render_template('500.html'), 500
+    return '<h1>Erro interno do servidor (500)</h1>', 500
 
 
 def send_async_email(app, payload):
     with app.app_context():
         headers = {
-            "Authorization": f"Bearer {app.config['RESEND_API_KEY']}",
+            "Authorization": f"Bearer {app.config.get('SENDGRID_API_KEY')}",
             "Content-Type": "application/json"
         }
         try:
-            requests.post("https://api.resend.com/emails", json=payload, headers=headers)
+            response = requests.post("https://api.sendgrid.com/v3/mail/send", json=payload, headers=headers)
+            print(f"Status SendGrid: {response.status_code}")
+            if response.status_code >= 400:
+                print(f"Erro SendGrid: {response.text}")
         except Exception as e:
-            print("Erro ao enviar email:", e)
+            print(f"Exceção ao enviar e-mail: {e}")
 
 
 def send_email(to, subject, template, **kwargs):
-    recipients = ["flaskaulasweb@zohomail.com"]
-    if to:
-        recipients.append(to)
+    if not app.config.get('SENDGRID_API_KEY') or not app.config.get('FLASKY_ADMIN'):
+        print("AVISO: SENDGRID_API_KEY ou FLASKY_ADMIN nao configurados no .env")
+        return None
 
-    html_content = render_template(template + '.html', **kwargs)
+    try:
+        html_content = render_template(template + '.html', **kwargs)
+    except Exception as e:
+        print(f"Erro ao carregar template {template}: {e}")
+        return None
 
     payload = {
-        "from": "Flasky <onboarding@resend.dev>",
-        "to": recipients,
-        "subject": app.config['FLASKY_MAIL_SUBJECT_PREFIX'] + ' ' + subject,
-        "html": html_content
+        "personalizations": [
+            {
+                "to": [
+                    {"email": "flaskaulasweb@zohomail.com"},
+                    {"email": to}
+                ],
+                "subject": app.config['FLASKY_MAIL_SUBJECT_PREFIX'] + ' ' + subject
+            }
+        ],
+        "from": {
+            "email": app.config['FLASKY_ADMIN']
+        },
+        "content": [
+            {
+                "type": "text/html",
+                "value": html_content
+            }
+        ]
     }
 
-    thr = Thread(target=send_async_email, args=[app._get_current_object(), payload])
+    thr = Thread(target=send_async_email, args=[app, payload])
     thr.start()
     return thr
 
@@ -103,14 +133,21 @@ def send_email(to, subject, template, **kwargs):
 @app.route('/', methods=['GET', 'POST'])
 def index():
     form = NameForm()
-    roles = Role.query.all()
-    form.role.choices = [(role.id, role.name) for role in roles]
+
+    # roles = Role.query.all()
+    # form.role.choices = [(role.id, role.name) for role in roles]
 
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.name.data).first()
-        selected_role = Role.query.get(form.role.data)
+
+        # selected_role = Role.query.get(form.role.data)
+
         if user is None:
-            user = User(username=form.name.data, role=selected_role)
+            user_role = Role.query.filter_by(name='User').first()
+            user = User(username=form.name.data, role=user_role)
+
+            # user = User(username=form.name.data, role=selected_role)
+
             db.session.add(user)
             db.session.commit()
             session['known'] = False
@@ -120,20 +157,21 @@ def index():
                            'mail/new_user', user=user)
         else:
             session['known'] = True
-            user.role = selected_role
-            db.session.commit()
+            # user.role = selected_role
+            # db.session.commit()
+
         session['name'] = form.name.data
         return redirect(url_for('index'))
 
-    users = User.query.all()
-    user_count = len(users)
-    role_count = len(roles)
+    # users = User.query.all()
+    # user_count = len(users)
+    # role_count = len(roles)
 
     return render_template('index.html',
                            form=form,
                            name=session.get('name'),
-                           known=session.get('known', False),
-                           users=users,
-                           roles=roles,
-                           user_count=user_count,
-                           role_count=role_count)
+                           known=session.get('known', False))
+                           # users=users,
+                           # roles=roles,
+                           # user_count=user_count,
+                           # role_count=role_count)
